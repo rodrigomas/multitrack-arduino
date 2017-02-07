@@ -13,8 +13,11 @@ Created on Dez 02, 2016
 #include <EthernetUdp.h>      
 //#include <DHT.h> 
 
+//#define UDP_PROTOCOL
+
 #include "UDPMessage.h"
 
+#ifdef UDP_PROTOCOL
 // Dummy Port
 unsigned int localPort = 8888;
 // Remote
@@ -25,6 +28,22 @@ boolean HasNet = false;
 
 // Remote IP
 byte RemoteIP[] = {192, 168, 11, 100};
+
+// MAC ADDRESS
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEE, 0xFE, 0xED };
+
+// IP (we can change to DHCP)
+IPAddress ip(192, 168, 11, 178);
+
+// Dummy buffer
+char packetBuffer[UDP_TX_PACKET_MAX_SIZE];
+
+// UDP Protocol
+EthernetUDP Udp;
+
+UDPMessage messageBuilder;
+
+#endif
 
 // External Devices
 const int LM35_0 = A1; // INT
@@ -38,15 +57,6 @@ const int LM35_1 = A5; // INT
 int pulsePin = A0;                 // Pulse Pin (A0)
 int blinkPin = 13;                // Blink to Debug
 
-// MAC ADDRESS
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEE, 0xFE, 0xED };
-
-// IP (we can change to DHCP)
-IPAddress ip(192, 168, 11, 178);
-
-// Dummy buffer
-char packetBuffer[UDP_TX_PACKET_MAX_SIZE];
-
 // Thread Access variable
 volatile int BPM;               
 volatile int Signal;
@@ -54,17 +64,12 @@ volatile int IBI = 600; // 30 years old normal IBI
 volatile boolean Pulse = false; // Pulse
 volatile boolean QS = false; // QS Curve Done
 
-// UDP Protocol
-EthernetUDP Udp;
-
 //Endereco I2C do MPU6050
 const int MPU=0x68;  
 
 //GPS
 String GPSInput = ""; 
 boolean GPSCompleted = false;
-
-UDPMessage messageBuilder;
 
 #define SENSOR_INTERVAL 300
 
@@ -82,12 +87,17 @@ void setup()
   InterruptSetup(); 
 
   delay(2000);
+
+#ifdef UDP_PROTOCOL
   
   Ethernet.begin(mac, ip); HasNet = true;
   
   //HasNet = (Ethernet.begin(mac) == 1); // For DHCP
 
   HasNet = HasNet && (Udp.begin(localPort) == 1);
+  
+#endif
+  
 }
 
 void sensorUpdate()
@@ -103,10 +113,15 @@ void sensorUpdate()
 
     //  sendMessage(messageBuilder.FillHumidity0Message(h));
 
+#ifdef UDP_PROTOCOL
       sendMessage(messageBuilder.FillTemperature0Message(T1));
+#endif      
       Serial.print("T1,"); Serial.println(T1);      
 
+#ifdef UDP_PROTOCOL
       sendMessage(messageBuilder.FillTemperature1Message(T0));
+#endif
+      
       Serial.print("T0,"); Serial.println(T0);
 
       LastSensorRead = millis();
@@ -115,12 +130,14 @@ void sensorUpdate()
 
 void sendMessage(char* msg)
 {
+#ifdef UDP_PROTOCOL  
     if(HasNet)
     {
       Udp.beginPacket(RemoteIP, RemotePort);
       Udp.write(msg);
       Udp.endPacket();  
     }   
+#endif    
 }
 
 float lat = 0;
@@ -209,12 +226,12 @@ int processGPSString(String msg)
 
 void loop()
 { 
-
-  //Serial.write("asas");
-  
   if (QS == true)
   {         
+
+#ifdef UDP_PROTOCOL    
     sendMessage(messageBuilder.FillBPMMessage(BPM));
+#endif
 
     Serial.print("B,"); Serial.println(BPM);
     
@@ -240,6 +257,8 @@ void loop()
 
   if (GPSCompleted)
   {
+
+#ifdef UDP_PROTOCOL
     int ret = processGPSString(GPSInput);
 
     int newline = GPSInput.indexOf("\n");
@@ -251,9 +270,11 @@ void loop()
     {
       GPSInput = GPSInput.substring(newline + 1);
     }    
+#endif
     
     GPSCompleted = false;
 
+#ifdef UDP_PROTOCOL
     if(ret == 1)
     {
       sendMessage(messageBuilder.FillGPSMessage(lat, lon)); 
@@ -266,6 +287,8 @@ void loop()
       sendMessage(messageBuilder.FillGPSSPeedMessage(gspeed)); 
       Serial.print("S,"); Serial.println(gspeed);
     }
+#endif
+    
   }
   
 }
@@ -278,7 +301,7 @@ void serialEvent()
     
     GPSInput += inChar;
 
-    //Serial.write(inChar);
+    Serial.write(inChar);
     
     if (inChar == '\n') 
     {
